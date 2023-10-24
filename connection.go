@@ -107,52 +107,57 @@ func (c *Connection) Receive() (dg *Datagram, err error) {
 	// return dg, err
 }
 
-// Queries the given identifier on the RCT device, returning its value as a datagram
+// Queries the given identifier on the RCT device with retry, returning its value as a datagram
 func (c *Connection) Query(id Identifier) (dg *Datagram, err error) {
-	if dg, ok := c.cache.Get(id); ok {
-		return dg, nil
-	}
-	c.builder.Build(&Datagram{Read, id, nil})
-	_, err = c.Send(c.builder)
-	if err != nil {
-		return nil, err
-	}
+    for attempt := 0; attempt < 2; attempt++ {
+        c.builder.Build(&Datagram{Read, id, nil})
+        _, err = c.Send(c.builder)
+        if err != nil {
+            // Hier könnte eine Pause (z.B. time.Sleep) eingefügt werden, bevor der nächste Versuch unternommen wird.
+            continue
+        }
 
-	dg, err = c.Receive()
-	if err != nil {
-		return nil, err
-	}
-	if dg.Cmd != Response || dg.Id != id {
-		return nil, RecoverableError{fmt.Sprintf("invalid response to read of %08X: %v", id, dg)}
-	}
-	c.cache.Put(dg)
+        dg, err = c.Receive()
+        if err != nil {
+            // Hier könnte eine Pause (z.B. time.Sleep) eingefügt werden, bevor der nächste Versuch unternommen wird.
+            continue
+        }
 
-	return dg, nil
+        if dg.Cmd != Response || dg.Id != id {
+            // Hier könnte eine Pause (z.B. time.Sleep) eingefügt werden, bevor der nächste Versuch unternommen wird.
+            continue
+        }
+
+        c.cache.Put(dg)
+        return dg, nil
+    }
+
+    return nil, err
 }
 
 // Queries the given identifier on the RCT device, returning its value as a float32
 func (c *Connection) QueryFloat32(id Identifier) (val float32, err error) {
-	dg, err := c.Query(id)
-	if err != nil {
-		return 0, err
-	}
-	return dg.Float32()
+    dg, err := c.Query(id)
+    if err != nil {
+        return 0, err
+    }
+    return dg.Float32()
 }
 
 // Queries the given identifier on the RCT device, returning its value as a uint16
 func (c *Connection) QueryUint16(id Identifier) (val uint16, err error) {
-	dg, err := c.Query(id)
-	if err != nil {
-		return 0, err
-	}
-	return dg.Uint16()
+    dg, err := c.Query(id)
+    if err != nil {
+        return 0, err
+    }
+    return dg.Uint16()
 }
 
 // Queries the given identifier on the RCT device, returning its value as a uint8
 func (c *Connection) QueryUint8(id Identifier) (val uint8, err error) {
-	dg, err := c.Query(id)
-	if err != nil {
-		return 0, err
-	}
-	return dg.Uint8()
+    dg, err := c.Query(id)
+    if err != nil {
+        return 0, err
+    }
+    return dg.Uint8()
 }
