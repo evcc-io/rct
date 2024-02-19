@@ -108,6 +108,7 @@ func (c *Connection) Receive() (dg *Datagram, err error) {
 }
 
 // Queries the given identifier on the RCT device with retry, returning its value as a datagram
+// Query-Funktion mit robuster Fehlerbehandlung und Wiederholungslogik
 func (c *Connection) Query(id Identifier) (*Datagram, error) {
     if dg, ok := c.cache.Get(id); ok {
         return dg, nil
