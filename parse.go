@@ -157,7 +157,7 @@ func (p *DatagramParser) Parse() (dg *Datagram, err error) {
 }
 
 // ParseStream parses a stream of bytes into a stream of datagrams
-func ParseStream(ctx context.Context, buf <-chan byte, dgC chan<- Datagram) {
+func ParseStream(ctx context.Context, buf <-chan byte, dgC chan<- *Datagram) {
 	var (
 		b           byte
 		length      uint16
@@ -276,7 +276,7 @@ func ParseStream(ctx context.Context, buf <-chan byte, dgC chan<- Datagram) {
 
 			// Done
 			state = AwaitingStart
-			dgC <- dg
+			dgC <- &dg
 		}
 	}
 }

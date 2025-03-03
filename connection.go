@@ -14,8 +14,8 @@ import (
 var (
 	// DialTimeout is the timeout for network connection
 	DialTimeout = 5 * time.Second
-	// ConnectTimeout is the timeout for data returned from device
-	ConnectTimeout = 30 * time.Second
+	// SuccessTimeout is the timeout for data returned from device
+	SuccessTimeout = 30 * time.Second
 )
 
 // Connection to a RCT device
@@ -23,7 +23,7 @@ type Connection struct {
 	mu      sync.Mutex
 	conn    net.Conn
 	cache   *cache
-	broker  *internal.Broker[Datagram]
+	broker  *internal.Broker[*Datagram]
 	errCB   func(error)
 	timeout time.Duration
 	logger  func(format string, a ...any)
@@ -55,7 +55,7 @@ func WithLogger(logger func(format string, a ...any)) func(*Connection) {
 func NewConnection(ctx context.Context, host string, opt ...func(*Connection)) (*Connection, error) {
 	conn := &Connection{
 		cache:  newCache(),
-		broker: internal.NewBroker[Datagram](),
+		broker: internal.NewBroker[*Datagram](),
 	}
 
 	for _, o := range opt {
@@ -67,8 +67,9 @@ func NewConnection(ctx context.Context, host string, opt ...func(*Connection)) (
 
 	go conn.receive(ctx, net.JoinHostPort(host, "8899"), bufC, errC)
 
+	// wait up to SuccessTimeout for first non-error response, i.e. successful read
 	var lastErr error
-	t := time.NewTimer(ConnectTimeout)
+	t := time.NewTimer(SuccessTimeout)
 INIT:
 	for {
 		select {
@@ -101,7 +102,11 @@ INIT:
 	go conn.handle(ctx, conn.broker.Subscribe(), errC)
 
 	if conn.logger != nil {
-		go conn.log(ctx, conn.broker.Subscribe())
+		go func() {
+			for dg := range conn.broker.Subscribe() {
+				conn.log("recv", dg)
+			}
+		}()
 	}
 
 	return conn, nil
@@ -110,39 +115,34 @@ INIT:
 // receive streams received bytes from the connection
 func (c *Connection) receive(ctx context.Context, addr string, bufC chan<- byte, errC chan<- error) {
 	buf := make([]byte, 1024)
+	defer c.close()
+
+	bo := backoff.NewExponentialBackOff()
+	bo.MaxInterval = 10 * time.Second
 
 	for {
-		n, err := backoff.Retry(ctx, func() (int, error) {
-			var err error
+		conn, err := c.connect(ctx, addr)
+		if err != nil {
+			errC <- err
+			time.Sleep(bo.NextBackOff())
+			continue
+		}
 
+		conn.SetReadDeadline(time.Now().Add(DialTimeout))
+		n, err := conn.Read(buf)
+		if err != nil {
 			c.mu.Lock()
-			if c.conn == nil {
-				var d net.Dialer
-
-				ctx, cancel := context.WithTimeout(ctx, DialTimeout)
-				defer cancel()
-
-				c.conn, err = d.DialContext(ctx, "tcp", addr)
-				if err != nil {
-					c.mu.Unlock()
-					return 0, err
-				}
-			}
-			conn := c.conn
+			c.close()
 			c.mu.Unlock()
 
-			conn.SetReadDeadline(time.Now().Add(DialTimeout))
-			return conn.Read(buf)
-		}, backoff.WithMaxElapsedTime(time.Minute))
-		if err != nil {
-			// reconnect after error
-			c.Close()
 			errC <- err
+			time.Sleep(bo.NextBackOff())
 			continue
 		}
 
 		// ack data received
 		errC <- nil
+		bo.Reset()
 
 		// stream received data
 		for _, b := range buf[:n] {
@@ -152,40 +152,53 @@ func (c *Connection) receive(ctx context.Context, addr string, bufC chan<- byte,
 }
 
 // handle is the receiver go routine
-func (c *Connection) handle(ctx context.Context, dgC <-chan Datagram, errC chan<- error) {
+func (c *Connection) connect(ctx context.Context, addr string) (net.Conn, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.conn != nil {
+		return c.conn, nil
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, DialTimeout)
+	defer cancel()
+
+	var d net.Dialer
+	conn, err := d.DialContext(ctx, "tcp", addr)
+	if err == nil {
+		c.conn = conn
+	}
+
+	return conn, err
+}
+
+func (c *Connection) handle(ctx context.Context, dgC <-chan *Datagram, errC chan<- error) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case dg := <-dgC:
 			if dg.Cmd == Response || dg.Cmd == LongResponse {
-				c.cache.Put(&dg)
+				c.cache.Put(dg)
 			}
 		}
 	}
 }
 
 // log is the logger go routine
-func (c *Connection) log(ctx context.Context, dgC <-chan Datagram) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case dg := <-dgC:
-			c.logger("recv: " + dg.String())
-		}
-	}
+func (c *Connection) log(action string, dg *Datagram) {
+	c.logger(action + ": " + dg.String())
 }
 
 // Closes the connection
-func (c *Connection) Close() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.conn.Close()
-	c.conn = nil
+func (c *Connection) close() {
+	if c.conn != nil {
+		c.conn.Close()
+		c.conn = nil
+	}
 }
 
-func (c *Connection) Send(rdb *DatagramBuilder) (int, error) {
+func (c *Connection) Send(dg *Datagram) (int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -194,20 +207,25 @@ func (c *Connection) Send(rdb *DatagramBuilder) (int, error) {
 		return 0, errors.New("disconnected")
 	}
 
+	c.log("send", dg)
+
+	var rdb DatagramBuilder
+	rdb.Build(dg)
+
 	c.conn.SetWriteDeadline(time.Now().Add(DialTimeout))
 	n, err := c.conn.Write(rdb.Bytes())
 	if err != nil {
-		c.conn.Close()
-		c.conn = nil
+		c.close()
 	}
+
 	return n, err
 }
 
-func (c *Connection) Subscribe() chan Datagram {
+func (c *Connection) Subscribe() chan *Datagram {
 	return c.broker.Subscribe()
 }
 
-func (c *Connection) Unsubscribe(ch chan Datagram) {
+func (c *Connection) Unsubscribe(ch chan *Datagram) {
 	c.broker.Unsubscribe(ch)
 }
 
@@ -221,7 +239,7 @@ func (c *Connection) Query(id Identifier) (*Datagram, error) {
 		return dg, nil
 	}
 
-	resC := make(chan Datagram, 1)
+	resC := make(chan *Datagram, 1)
 	data := c.broker.Subscribe()
 	go func() {
 		for dg := range data {
@@ -235,9 +253,7 @@ func (c *Connection) Query(id Identifier) (*Datagram, error) {
 	}()
 	defer c.broker.Unsubscribe(data)
 
-	var rdb DatagramBuilder
-	rdb.Build(&Datagram{Read, id, nil})
-	if _, err := c.Send(&rdb); err != nil {
+	if _, err := c.Send(&Datagram{Read, id, nil}); err != nil {
 		return nil, err
 	}
 
@@ -245,7 +261,7 @@ func (c *Connection) Query(id Identifier) (*Datagram, error) {
 	case <-time.After(c.timeout):
 		return nil, errors.New("timeout")
 	case dg := <-resC:
-		return &dg, nil
+		return dg, nil
 	}
 }
 
@@ -287,8 +303,6 @@ func (c *Connection) QueryUint8(id Identifier) (uint8, error) {
 
 // Writes the given identifier with the given value on the RCT device
 func (c *Connection) Write(id Identifier, data []byte) error {
-	var rdb DatagramBuilder
-	rdb.Build(&Datagram{Write, id, data})
-	_, err := c.Send(&rdb)
+	_, err := c.Send(&Datagram{Write, id, data})
 	return err
 }
