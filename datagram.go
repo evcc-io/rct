@@ -219,7 +219,7 @@ type Datagram struct {
 
 // Prints a RCT datagram in a human-readable representation
 func (d *Datagram) String() string {
-	l := min(32, len(d.Data))
+	l := min(24, len(d.Data))
 	data := fmt.Sprintf("% x", d.Data[:l])
 	if l < len(d.Data) {
 		data += fmt.Sprintf(" ... (%d)", len(d.Data))
