@@ -11,8 +11,12 @@ import (
 	"github.com/mlnoga/rct/internal"
 )
 
-// DialTimeout is the default cache for connecting to a RCT device
-var DialTimeout = time.Second * 5
+var (
+	// DialTimeout is the timeout for network connection
+	DialTimeout = 5 * time.Second
+	// ConnectTimeout is the timeout for data returned from device
+	ConnectTimeout = 30 * time.Second
+)
 
 // Connection to a RCT device
 type Connection struct {
@@ -63,12 +67,24 @@ func NewConnection(ctx context.Context, host string, opt ...func(*Connection)) (
 
 	go conn.receive(ctx, net.JoinHostPort(host, "8899"), bufC, errC)
 
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case err := <-errC:
-		if err != nil {
-			return nil, err
+	var lastErr error
+	t := time.NewTimer(ConnectTimeout)
+INIT:
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-t.C:
+			if lastErr != nil {
+				return nil, lastErr
+			}
+			return nil, errors.New("timeout")
+		case err := <-errC:
+			if err != nil {
+				lastErr = err
+				continue
+			}
+			break INIT
 		}
 	}
 
@@ -108,16 +124,20 @@ func (c *Connection) receive(ctx context.Context, addr string, bufC chan<- byte,
 
 				c.conn, err = d.DialContext(ctx, "tcp", addr)
 				if err != nil {
-					errC <- err
+					c.mu.Unlock()
 					return 0, err
 				}
 			}
 			conn := c.conn
 			c.mu.Unlock()
 
+			conn.SetReadDeadline(time.Now().Add(DialTimeout))
 			return conn.Read(buf)
 		}, backoff.WithMaxElapsedTime(time.Minute))
 		if err != nil {
+			// reconnect after error
+			c.Close()
+			errC <- err
 			continue
 		}
 
@@ -157,7 +177,14 @@ func (c *Connection) log(ctx context.Context, dgC <-chan Datagram) {
 	}
 }
 
-// Sends the given RCT datagram via the connection
+// Closes the connection
+func (c *Connection) Close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.conn.Close()
+	c.conn = nil
+}
+
 func (c *Connection) Send(rdb *DatagramBuilder) (int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -167,6 +194,7 @@ func (c *Connection) Send(rdb *DatagramBuilder) (int, error) {
 		return 0, errors.New("disconnected")
 	}
 
+	c.conn.SetWriteDeadline(time.Now().Add(DialTimeout))
 	n, err := c.conn.Write(rdb.Bytes())
 	if err != nil {
 		c.conn.Close()
