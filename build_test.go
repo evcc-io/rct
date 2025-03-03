@@ -1,15 +1,18 @@
 package rct
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 type builderTestCase struct {
 	Dg     Datagram
-	Expect string
+	Expect []byte
 }
 
 var builderTestCases = []builderTestCase{
-	{Datagram{Read, BatteryPowerW, nil}, "[2B 01 04 40 0F 01 5B 58 B4]"},
-	{Datagram{Read, InverterACPowerW, nil}, "[2B 01 04 DB 2D 2D 69 AE 55 AB]"},
+	{Datagram{Read, BatteryPowerW, nil}, []byte{0x2B, 0x01, 0x04, 0x40, 0x0F, 0x01, 0x5B, 0x58, 0xB4}},
+	{Datagram{Read, InverterACPowerW, nil}, []byte{0x2B, 0x01, 0x04, 0xDB, 0x2D, 0x2D, 0x69, 0xAE, 0x55, 0xAB}},
 }
 
 // Test if builder returns expected byte representation
@@ -17,8 +20,8 @@ func TestBuilder(t *testing.T) {
 	builder := new(DatagramBuilder)
 	for _, tc := range builderTestCases {
 		builder.Build(&tc.Dg)
-		res := builder.String()
-		if res != tc.Expect {
+		res := builder.Bytes()
+		if slices.Compare(res, tc.Expect) != 0 {
 			t.Errorf("error got %s, should be %s", res, tc.Expect)
 		}
 	}
