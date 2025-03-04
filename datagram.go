@@ -217,9 +217,17 @@ type Datagram struct {
 	Data []byte
 }
 
+func (d *Datagram) Clone() *Datagram {
+	return &Datagram{
+		Cmd:  d.Cmd,
+		Id:   d.Id,
+		Data: append([]byte(nil), d.Data...),
+	}
+}
+
 // Prints a RCT datagram in a human-readable representation
 func (d *Datagram) String() string {
-	l := min(24, len(d.Data))
+	l := min(20, len(d.Data))
 	data := fmt.Sprintf("% x", d.Data[:l])
 	if l < len(d.Data) {
 		data += fmt.Sprintf(" ... (%d)", len(d.Data))

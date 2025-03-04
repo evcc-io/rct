@@ -276,7 +276,7 @@ func ParseStream(ctx context.Context, buf <-chan byte, dgC chan<- *Datagram) {
 
 			// Done
 			state = AwaitingStart
-			dgC <- &dg
+			dgC <- dg.Clone()
 		}
 	}
 }
