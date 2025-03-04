@@ -128,7 +128,6 @@ func (c *Connection) receive(ctx context.Context, addr string, bufC chan<- byte,
 			continue
 		}
 
-		conn.SetReadDeadline(time.Now().Add(DialTimeout))
 		n, err := conn.Read(buf)
 		if err != nil {
 			c.mu.Lock()
