@@ -1,6 +1,8 @@
 package internal
 
-import "context"
+import (
+	"context"
+)
 
 // Broker courtesy of https://stackoverflow.com/questions/36417199/how-to-broadcast-message-using-channel
 
@@ -13,7 +15,7 @@ type Broker[T any] struct {
 func NewBroker[T any]() *Broker[T] {
 	return &Broker[T]{
 		publishCh: make(chan T, 1),
-		subCh:     make(chan chan T, 1),
+		subCh:     make(chan chan T),
 		unsubCh:   make(chan chan T, 1),
 	}
 }

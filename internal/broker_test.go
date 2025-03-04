@@ -12,7 +12,7 @@ func TestBroker(t *testing.T) {
 	defer cancel()
 
 	b := NewBroker[int]()
-	go b.Start(ctx)
+	go b.Start(context.TODO())
 
 	go func() {
 		for {
@@ -25,7 +25,7 @@ func TestBroker(t *testing.T) {
 		}
 	}()
 
-	for {
+	for ctx.Err() == nil {
 		go func(dataC chan int) {
 			defer b.Unsubscribe(dataC)
 			select {
