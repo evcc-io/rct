@@ -99,7 +99,7 @@ INIT:
 
 	go conn.broker.Start(ctx)
 	go ParseStream(ctx, bufC, conn.broker.PublishChan())
-	go conn.handle(ctx, conn.broker.Subscribe(), errC)
+	go conn.handle(ctx, conn.broker.Subscribe())
 
 	if conn.logger != nil {
 		go func() {
@@ -171,7 +171,7 @@ func (c *Connection) connect(ctx context.Context, addr string) (net.Conn, error)
 	return conn, err
 }
 
-func (c *Connection) handle(ctx context.Context, dgC <-chan *Datagram, errC chan<- error) {
+func (c *Connection) handle(ctx context.Context, dgC <-chan *Datagram) {
 	for {
 		select {
 		case <-ctx.Done():
