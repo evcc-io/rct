@@ -16,6 +16,9 @@ var (
 	DialTimeout = 5 * time.Second
 	// SuccessTimeout is the timeout for data returned from device
 	SuccessTimeout = 30 * time.Second
+	// ErrMustRetry is returned when a query result was not found in the cache.
+	// It's up to the client application to decide the timing for retrying the query.
+	ErrMustRetry = errors.New("must retry")
 )
 
 // Connection to a RCT device
@@ -238,30 +241,11 @@ func (c *Connection) Query(id Identifier) (*Datagram, error) {
 		return dg, nil
 	}
 
-	resC := make(chan *Datagram, 1)
-	data := c.broker.Subscribe()
-	go func() {
-		for dg := range data {
-			if dg.Id == id {
-				select {
-				case resC <- dg:
-				default:
-				}
-			}
-		}
-	}()
-	defer c.broker.Unsubscribe(data)
-
 	if _, err := c.Send(&Datagram{Read, id, nil}); err != nil {
 		return nil, err
 	}
 
-	select {
-	case <-time.After(c.timeout):
-		return nil, errors.New("timeout")
-	case dg := <-resC:
-		return dg, nil
-	}
+	return nil, ErrMustRetry
 }
 
 // Queries the given identifier on the RCT device, returning its value as a float32
