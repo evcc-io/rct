@@ -1,4 +1,4 @@
-module github.com/mlnoga/rct
+module github.com/evcc-io/rct
 
 go 1.23
 
