@@ -2,20 +2,12 @@ package rct
 
 import (
 	"bytes"
-	"fmt"
 )
 
 // Builds RCT datagrams into an internal buffer, with escaping and CRC correction
 type DatagramBuilder struct {
 	buffer bytes.Buffer
-	crc    *CRC
-}
-
-// Returns a new DatagramBuilder
-func NewDatagramBuilder() (b *DatagramBuilder) {
-	return &DatagramBuilder{
-		crc: NewCRC(),
-	}
+	crc    CRC
 }
 
 // Resets the internal buffer and CRC
@@ -64,18 +56,4 @@ func (rdb *DatagramBuilder) Build(dg *Datagram) {
 // Returns the datagram built so far as an array of bytes
 func (r *DatagramBuilder) Bytes() []byte {
 	return r.buffer.Bytes()
-}
-
-// Converts the datagram into a string representation for printing
-func (r *DatagramBuilder) String() string {
-	var buf bytes.Buffer
-	buf.WriteByte(byte('['))
-	for i, b := range r.buffer.Bytes() {
-		if i != 0 {
-			buf.WriteByte(byte(' '))
-		}
-		fmt.Fprintf(&buf, "%02X", b)
-	}
-	buf.WriteByte(byte(']'))
-	return buf.String()
 }
