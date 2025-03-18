@@ -124,6 +124,7 @@ var identifiersToString = map[Identifier]string{
 	RealPowerW:       "Real power [W]",
 	TotalGridPowerW:  "Total grid power [W]",
 	BatterySoC:       "Battery state of charge",
+	S0ExternalPowerW: "S0 external power [W]",
 
 	// voltage
 	//
@@ -143,15 +144,27 @@ var identifiersToString = map[Identifier]string{
 	TotalEnergyGridFeedInWh: "Total energy grid feed in [Wh]",
 	TotalEnergyGridLoadWh:   "Total energy grid load [Wh]",
 
+	// write
+	//
+	PowerMngSocStrategy:         "Power management SOC strategy",
+	PowerMngSocTargetSet:        "Power management SOC target set",
+	PowerMngBatteryPowerExternW: "Power management battery external power [W]",
+	BatterySoCTargetMin:         "Battery SOC target min",
+	BatterySoCTargetMinIsland:   "Battery SOC target min island",
+	PowerMngSocMax:              "Power management SOC max",
+	PowerMngSocChargePowerW:     "Power management SOC charge power [W]",
+	PowerMngSocCharge:           "Power management SOC charge",
+	PowerMngGridPowerLimitW:     "Power management grid power limit [W]",
+	PowerMngUseGridPowerEnable:  "Power management use grid power enable",
+
 	// other
 	//
-	InverterState:             "Inverter state",
-	BatteryCapacityAh:         "Battery capacity [Ah]",
-	BatteryTemperatureC:       "Battery temperature [°C]",
-	BatterySoCTarget:          "Battery SoC target",
-	BatterySoCTargetHigh:      "Battery SoC target high",
-	BatterySoCTargetMin:       "Battery SoC target min",
-	BatterySoCTargetMinIsland: "Battery SoC target min island",
+	InverterState:        "Inverter state",
+	BatteryCapacityAh:    "Battery capacity [Ah]",
+	BatteryTemperatureC:  "Battery temperature [°C]",
+	BatterySoCTarget:     "Battery SOC target",
+	BatterySoCTargetHigh: "Battery SOC target high",
+	BatteryBatStatus:     "Battery status",
 }
 
 // Converts an identifier to a human-readable representation
