@@ -103,6 +103,11 @@ const (
 	PowerMngGridPowerLimitW     Identifier = 0x54829753 // float32
 	PowerMngUseGridPowerEnable  Identifier = 0x36A9E9A6 // bool
 
+	// buf_v_control
+	BufVControlPowerReductionMaxSolar     Identifier = 0x4BC0F974 // float32
+	BufVControlPowerReductionMaxSolarGrid Identifier = 0xF473BC5E // float32
+	BufVControlPowerReduction             Identifier = 0xFE1AA500 // float32 0 ... 1
+
 	// other
 	//
 	InverterState        Identifier = 0x5F33284E // uint8
@@ -156,6 +161,12 @@ var identifiersToString = map[Identifier]string{
 	PowerMngSocCharge:           "Power management SOC charge",
 	PowerMngGridPowerLimitW:     "Power management grid power limit [W]",
 	PowerMngUseGridPowerEnable:  "Power management use grid power enable",
+
+	// buf_v_control
+	//
+	BufVControlPowerReductionMaxSolar:     "Solar plant peak power",
+	BufVControlPowerReductionMaxSolarGrid: "Max. allowed grid feed-in power",
+	BufVControlPowerReduction:             "External power reduction based on solar plant peak power ",
 
 	// other
 	//
