@@ -130,6 +130,7 @@ func (c *Connection) receive(ctx context.Context, addr string, bufC chan<- byte,
 			time.Sleep(bo.NextBackOff())
 			continue
 		}
+		errC <- nil
 
 		n, err := conn.Read(buf)
 		if err != nil {
@@ -143,7 +144,6 @@ func (c *Connection) receive(ctx context.Context, addr string, bufC chan<- byte,
 		}
 
 		// ack data received
-		errC <- nil
 		bo.Reset()
 
 		// stream received data
