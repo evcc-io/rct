@@ -92,7 +92,7 @@ const (
 	TotalEnergyBattInWh     Identifier = 0x5570401B // float32
 	TotalEnergyBattOutWh    Identifier = 0xA9033880 // float32
 	TotalEnergyHouseholdWh  Identifier = 0xEFF4B537 // float32
-	TotalEnergyGridWh       Identifier = 0xA59C8428 // float32
+	TotalExternalEnergyWh   Identifier = 0xA59C8428 // float32
 	TotalEnergyGridFeedInWh Identifier = 0x44D4C533 // float32
 	TotalEnergyGridLoadWh   Identifier = 0x62FBE7DC // float32
 
