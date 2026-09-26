@@ -111,22 +111,26 @@ func (c *Connection) SetSocChargePower(power float32) error {
 	return nil
 }
 
-// SetGridPowerLimit sets the maximum battery-to-grid power (p_rec_lim[1])
-func (c *Connection) SetGridPowerLimit(power float32) error {
-	data := make([]byte, 4)
-	binary.BigEndian.PutUint32(data, math.Float32bits(power))
+// SetSocCharge sets the trigger for charging to SOC_min (power_mng.soc_charge)
+func (c *Connection) SetSocCharge(charge float32) error {
+	if charge < 0.00 || charge > 1.00 {
+		return fmt.Errorf("invalid SOC charge value: %.2f, valid range is 0.00 to 1.00", charge)
+	}
 
-	if err := c.Write(PowerMngGridPowerLimitW, data); err != nil {
-		return fmt.Errorf("failed to set grid power limit: %w", err)
+	data := make([]byte, 4)
+	binary.BigEndian.PutUint32(data, math.Float32bits(charge))
+
+	if err := c.Write(PowerMngSocCharge, data); err != nil {
+		return fmt.Errorf("failed to set SOC charge: %w", err)
 	}
 
 	return nil
 }
 
 // SetGridPowerLimit sets the maximum battery-to-grid power (p_rec_lim[1])
-func (c *Connection) SetGridPowerLimit(power uint16) error {
-	data := make([]byte, 2)
-	binary.BigEndian.PutUint16(data, power)
+func (c *Connection) SetGridPowerLimit(power float32) error {
+	data := make([]byte, 4)
+	binary.BigEndian.PutUint32(data, math.Float32bits(power))
 
 	if err := c.Write(PowerMngGridPowerLimitW, data); err != nil {
 		return fmt.Errorf("failed to set grid power limit: %w", err)
