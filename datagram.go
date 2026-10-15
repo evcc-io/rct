@@ -164,7 +164,7 @@ var identifiersToString = map[Identifier]string{
 	TotalEnergyBattInWh:     "Total energy batt in [Wh]",
 	TotalEnergyBattOutWh:    "Total energy batt out [Wh]",
 	TotalEnergyHouseholdWh:  "Total energy household [Wh]",
-	TotalEnergyGridWh:       "Total energy grid [Wh]",
+	TotalExternalEnergyWh:   "Total S0 external energy [Wh]",
 	TotalEnergyGridFeedInWh: "Total energy grid feed in [Wh]",
 	TotalEnergyGridLoadWh:   "Total energy grid load [Wh]",
 
