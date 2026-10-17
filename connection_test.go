@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"testing"
-	"time"
 )
 
 func TestHandleIgnoresUnsolicitedResponses(t *testing.T) {
@@ -19,40 +18,33 @@ func TestHandleIgnoresUnsolicitedResponses(t *testing.T) {
 	dgC := make(chan *Datagram)
 	go c.handle(ctx, dgC)
 
+	// unbuffered channel: once handle receives this, the previous datagram is fully processed
+	barrier := &Datagram{Cmd: Read}
+
 	foreign := &Datagram{Response, TotalEnergySolarGenBWh, []byte{0x4b, 0x8a, 0x90, 0x16}} // 18161708 Wh
 	own := &Datagram{Response, TotalEnergySolarGenBWh, []byte{0x40, 0xe2, 0x25, 0xbc}}     // 7.07 Wh
 
 	// unsolicited response must not be cached
 	dgC <- foreign
-	dgC <- &Datagram{Cmd: Read} // barrier: handle has processed foreign once this is received
+	dgC <- barrier
 	if dg, _ := c.cache.Get(TotalEnergySolarGenBWh); dg != nil {
 		t.Fatalf("unsolicited response cached: %v", dg)
 	}
 
 	// response to an outstanding read is cached
-	c.expectResponse(TotalEnergySolarGenBWh)
+	c.mu.Lock()
+	c.pending[TotalEnergySolarGenBWh] = struct{}{}
+	c.mu.Unlock()
 	dgC <- own
-	waitFor(t, func() bool {
-		dg, _ := c.cache.Get(TotalEnergySolarGenBWh)
-		return dg != nil
-	})
+	dgC <- barrier
+	if dg, _ := c.cache.Get(TotalEnergySolarGenBWh); dg == nil {
+		t.Fatal("requested response not cached")
+	}
 
 	// a second, unsolicited response must not overwrite the cached value
 	dgC <- foreign
-	dgC <- &Datagram{Cmd: Read}
-	dg, _ := c.cache.Get(TotalEnergySolarGenBWh)
-	if !bytes.Equal(dg.Data, own.Data) {
+	dgC <- barrier
+	if dg, _ := c.cache.Get(TotalEnergySolarGenBWh); !bytes.Equal(dg.Data, own.Data) {
 		t.Fatalf("cache overwritten by unsolicited response: %v", dg)
-	}
-}
-
-func waitFor(t *testing.T, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatal("timeout")
-		}
-		time.Sleep(time.Millisecond)
 	}
 }

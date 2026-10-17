@@ -189,13 +189,6 @@ func (c *Connection) handle(ctx context.Context, dgC <-chan *Datagram) {
 	}
 }
 
-// expectResponse marks the identifier as having an outstanding read
-func (c *Connection) expectResponse(id Identifier) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.pending[id] = struct{}{}
-}
-
 // consumePending reports whether a read for the identifier is outstanding and clears it.
 // Inverters relay responses of other inverters on the network; caching those would serve foreign values.
 func (c *Connection) consumePending(id Identifier) bool {
