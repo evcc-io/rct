@@ -26,6 +26,7 @@ type Connection struct {
 	mu      sync.Mutex
 	conn    net.Conn
 	cache   *cache
+	pending map[Identifier]struct{} // identifiers with an outstanding read
 	broker  *internal.Broker[*Datagram]
 	errCB   func(error)
 	timeout time.Duration
@@ -57,8 +58,9 @@ func WithLogger(logger func(format string, a ...any)) func(*Connection) {
 // Must not be called concurrently.
 func NewConnection(ctx context.Context, addr string, opt ...func(*Connection)) (*Connection, error) {
 	conn := &Connection{
-		cache:  newCache(),
-		broker: internal.NewBroker[*Datagram](),
+		cache:   newCache(),
+		pending: make(map[Identifier]struct{}),
+		broker:  internal.NewBroker[*Datagram](),
 	}
 
 	for _, o := range opt {
@@ -180,11 +182,21 @@ func (c *Connection) handle(ctx context.Context, dgC <-chan *Datagram) {
 		case <-ctx.Done():
 			return
 		case dg := <-dgC:
-			if dg.Cmd == Response || dg.Cmd == LongResponse {
+			if (dg.Cmd == Response || dg.Cmd == LongResponse) && c.consumePending(dg.Id) {
 				c.cache.Put(dg)
 			}
 		}
 	}
+}
+
+// consumePending reports whether a read for the identifier is outstanding and clears it.
+// Inverters relay responses of other inverters on the network; caching those would serve foreign values.
+func (c *Connection) consumePending(id Identifier) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_, ok := c.pending[id]
+	delete(c.pending, id)
+	return ok
 }
 
 // log is the logger go routine
@@ -218,6 +230,8 @@ func (c *Connection) Send(dg *Datagram) (int, error) {
 	n, err := c.conn.Write(rdb.Bytes())
 	if err != nil {
 		c.close()
+	} else if dg.Cmd == Read {
+		c.pending[dg.Id] = struct{}{}
 	}
 
 	return n, err
