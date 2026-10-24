@@ -1,8 +1,10 @@
 package rct
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -16,6 +18,8 @@ var (
 	DialTimeout = 5 * time.Second
 	// SuccessTimeout is the timeout for data returned from device
 	SuccessTimeout = 30 * time.Second
+	// VerifyTimeout is the timeout for reading back a written value
+	VerifyTimeout = 5 * time.Second
 	// ErrMustRetry is returned when a query result was not found in the cache.
 	// It's up to the client application to decide the timing for retrying the query.
 	ErrMustRetry = errors.New("must retry")
@@ -302,4 +306,49 @@ func (c *Connection) QueryUint8(id Identifier) (uint8, error) {
 func (c *Connection) Write(id Identifier, data []byte) error {
 	_, err := c.Send(&Datagram{Write, id, data})
 	return err
+}
+
+// WriteVerified writes the given identifier and reads it back until the device reports the written value.
+// The protocol does not acknowledge writes, so a write into a broken connection is otherwise lost silently.
+func (c *Connection) WriteVerified(id Identifier, data []byte) error {
+	dgC := c.broker.Subscribe()
+	defer c.broker.Unsubscribe(dgC)
+
+	if err := c.Write(id, data); err != nil {
+		return err
+	}
+
+	timeout := time.After(VerifyTimeout)
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+
+	var got []byte
+	for {
+		// re-read periodically, the subscription drops datagrams under load
+		if _, err := c.Send(&Datagram{Read, id, nil}); err != nil {
+			return err
+		}
+
+	WAIT:
+		for {
+			select {
+			case <-timeout:
+				if got != nil {
+					return fmt.Errorf("write %v not applied: got %x, want %x", id, got, data)
+				}
+				return fmt.Errorf("write %v not confirmed", id)
+			case <-tick.C:
+				break WAIT
+			case dg := <-dgC:
+				if dg.Id != id || dg.Cmd != Response && dg.Cmd != LongResponse {
+					continue
+				}
+				// responses relayed for other clients may still carry the previous value
+				if bytes.Equal(dg.Data, data) {
+					return nil
+				}
+				got = dg.Data
+			}
+		}
+	}
 }
